@@ -9,7 +9,7 @@ class ERWorkflow:
     main_frame : ctk.CTkFrame
     next_frame : ERExecution
     data : Data
-    
+
     def __init__(self, master, color):
         self.master = master
         self.main_frame = ctk.CTkFrame(master, fg_color=color)
@@ -33,11 +33,11 @@ class ERWorkflow:
         # --- KNN OPTIONS CONTAINER (Starts Hidden) ---
         # I added a slight background color to make it look like a distinct sub-menu
         self.frame_knn_options = ctk.CTkFrame(self.frame_filter_section, fg_color="#111111", corner_radius=5)
-        
+
         # Row 1: Metric & K
         row1 = ctk.CTkFrame(self.frame_knn_options, fg_color="transparent")
         row1.pack(fill="x", pady=(10, 5), padx=10)
-        
+
         ctk.CTkLabel(row1, text="Metric:", font=("Courier", 12)).pack(side="left", padx=(0, 5))
         self.knn_metric = ctk.CTkOptionMenu(row1, values=['cosine', 'dice', 'jaccard'], width=120, fg_color="#333333", button_color="#00ffcc")
         self.knn_metric.pack(side="left", padx=(0, 20))
@@ -52,8 +52,8 @@ class ERWorkflow:
 
         ctk.CTkLabel(row2, text="Tokenization:", font=("Courier", 12)).pack(side="left", padx=(0, 5))
         self.knn_tokenization = ctk.CTkOptionMenu(
-            row2, 
-            values=['standard', 'qgrams', 'standard_multiset', 'qgrams_multiset'], 
+            row2,
+            values=['standard', 'qgrams', 'standard_multiset', 'qgrams_multiset'],
             width=160, fg_color="#333333", button_color="#00ffcc",
             command=self.toggle_qgram_options # <--- Triggers the Q-gram input
         )
@@ -65,10 +65,10 @@ class ERWorkflow:
         self.knn_qgram_num = ctk.CTkEntry(self.frame_qgram, placeholder_text="e.g., 3", width=60, border_color="#333333")
         self.knn_qgram_num.pack(side="left")
 
-        
-    
-    
-   
+
+
+
+
     def llm_selection_step(self):
         # 1. Main Wrapper for the whole LLM section
         self.frame_llm_section = ctk.CTkFrame(self.scroll_container, fg_color="transparent")
@@ -110,12 +110,27 @@ class ERWorkflow:
         )
         self.dropdown_strategy.pack(anchor="w")
 
+
+        frame_batch = ctk.CTkFrame(row_dropdowns, fg_color="transparent")
+        frame_batch.pack(side="left")
+
+        lbl_batch = ctk.CTkLabel(frame_batch, text="Batch Size:", font=("Courier", 12))
+        lbl_batch.pack(anchor="w")
+
+        self.entry_batch_size = ctk.CTkEntry(
+            frame_batch, 
+            width=70, 
+            border_color="#333333"
+        )
+        self.entry_batch_size.pack(anchor="w")
+        self.entry_batch_size.insert(0, "1")
+        
         # ==========================================
         #       FEW SHOT OPTIONS (Starts Hidden)
         # ==========================================
         # Added a dark background to make it look like a sub-menu
         self.frame_fs_options = ctk.CTkFrame(self.frame_llm_section, fg_color="#111111", corner_radius=5)
-        
+
         row_fs = ctk.CTkFrame(self.frame_fs_options, fg_color="transparent")
         row_fs.pack(fill="x", pady=10, padx=10)
 
@@ -132,8 +147,8 @@ class ERWorkflow:
             fg_color="#333333", button_color="#00ffcc", width=120
         )
         self.dropdown_fs_order.pack(side="left")
-        
-        
+
+
     def system_prompt_step(self):
         lbl_prompt = ctk.CTkLabel(self.scroll_container, text="--- SYSTEM PROMPT ---", font=("Courier", 14, "bold"),
                                   text_color="#39ff14")
@@ -146,8 +161,8 @@ class ERWorkflow:
             border_color="#333333", border_width=1, fg_color="#0a0a0a", text_color="#00ffcc"
         )
         self.textbox_prompt.pack(anchor="w", pady=(0, 20))
-        self.textbox_prompt.insert("0.0", "You are given two record descriptions and your task is to identify\n\
-            if the records refer to the same entity or not.")
+        self.textbox_prompt.insert("0.0", "You are given two record descriptions and your task is to identify \
+if the records refer to the same entity or not.")
 
     def prompting_strategy_step(self):
         lbl_strategy = ctk.CTkLabel(self.scroll_container, text="--- PROMPTING STRATEGY ---", font=("Courier", 14, "bold"),
@@ -176,13 +191,13 @@ class ERWorkflow:
             fg_color="#333333", button_color="#00ffcc"
         )
         self.dropdown_fs_order.pack(side="left")
-        
+
     def build(self):
         # 1. Main Scrollable Container
         # We use a scrollable frame because configuration pages get tall quickly!
         self.scroll_container = ctk.CTkScrollableFrame(self.main_frame, fg_color="transparent")
         self.scroll_container.pack(fill="both", expand=True, padx=40, pady=20)
-        
+
         # --- THE MouseWheel FIX: Listen for mouse wheel scrolling ---
         # Windows & macOS use <MouseWheel>
         self.master.bind_all("<MouseWheel>", self.scroll_with_mousewheel)
@@ -200,7 +215,7 @@ class ERWorkflow:
         # ==========================================
         #             1. FILTERING STEP
         # ==========================================
-        self.filtering_step()  
+        self.filtering_step()
         # ==========================================
         #             2. LLM SELECTION
         # ==========================================
@@ -219,7 +234,7 @@ class ERWorkflow:
         #        5. CLUSTERING (CONDITIONAL)
         # ==========================================
         # Only build this section if it is NOT a "dirty ER" task
-    
+
         lbl_cluster = ctk.CTkLabel(self.scroll_container, text="--- CLUSTERING SETTINGS ---",
                                     font=("Courier", 14, "bold"), text_color="#39ff14")
         lbl_cluster.pack(anchor="w", pady=(30, 5))
@@ -235,7 +250,7 @@ class ERWorkflow:
         ctk.CTkLabel(frame_dropdown, text="Algorithm:", font=("Courier", 12)).pack(anchor="w")
         self.dropdown_cluster = ctk.CTkOptionMenu(
             frame_dropdown,
-            values=["Connected Components", "Unique Mapping Clustering"],
+            values=["Skip", "Connected Components", "Unique Mapping Clustering"],
             fg_color="#333333",  button_color="#00ffcc", button_hover_color="#004d40", text_color="white"
         )
         self.dropdown_cluster.pack(anchor="w")
@@ -246,14 +261,14 @@ class ERWorkflow:
 
         ctk.CTkLabel(frame_sim, text="Sim Threshold (float):", font=("Courier", 12)).pack(anchor="w")
         self.entry_cluster_threshold = ctk.CTkEntry(
-            frame_sim, 
-            placeholder_text="e.g., 0.75", 
-            width=160, 
+            frame_sim,
+            placeholder_text="e.g., 0.75",
+            width=160,
             border_color="#333333"
         )
         self.entry_cluster_threshold.pack(anchor="w")
-        
-        
+
+
         # ==========================================
         #             EXECUTE BUTTON
         # ==========================================
@@ -264,20 +279,28 @@ class ERWorkflow:
             fg_color="transparent", border_width=2, text_color="#00ffcc", border_color="#00ffcc", hover_color="#004d40",
             width=300, height=50
         )
-        btn_start_er.pack(pady=40)        
-    
+        btn_start_er.pack(pady=40)
+
     def init_workflow(self):
         """Gathers all UI parameters, formats them safely, and stores them in a dictionary."""
         try:
-            
-            df_1 = pd.read_csv("data/D2/abtclean.csv", sep="|").astype(str)
-            df_2 = pd.read_csv("data/D2/buyclean.csv", sep="|").astype(str)
-            
+
+            df_1 = pd.read_csv("data/D2/abtclean.csv", sep="|", nrows=50).astype(str)
+            df_2 = pd.read_csv("data/D2/buyclean.csv", sep="|", nrows=50).astype(str)
+
             gt = pd.read_csv("data/D2/gtclean.csv", sep="|").astype(str)
+            
+            ids_1 = df_1["id"].tolist()
+            ids_2 = df_2["id"].tolist()
+            
+            gt = gt[gt["D1"].isin(ids_1) & gt["D2"].isin(ids_2)]
+            
+            print(gt.shape[0])
+            
             self.data = Data(dataset_1=df_1, dataset_2=df_2, id_column_name_1="id", id_column_name_2="id", ground_truth=gt)
-            
-            
-            
+
+
+
             # This will store all our extracted settings
             self.workflow_params = {}
 
@@ -287,25 +310,27 @@ class ERWorkflow:
 
             if filter_algo == "KNN Search":
                 self.workflow_params["knn_metric"] = self.knn_metric.get()
-                
+
                 # Safely parse K
                 k_val = self.knn_k.get()
                 self.workflow_params["knn_k"] = int(k_val) if k_val.isdigit() else 5
-                
+
                 # Safely parse tokenization
                 tok_val = self.knn_tokenization.get()
                 self.workflow_params["knn_tokenization"] = tok_val
-                
+
                 if "qgrams" in tok_val:
                     q_val = self.knn_qgram_num.get()
                     self.workflow_params["knn_qgrams"] = int(q_val) if q_val.isdigit() else 3
-                
+
 
             # --- 2. LLM & STRATEGY ---
             self.workflow_params["llm_model"] = self.dropdown_llm.get()
-            
+
             strategy = self.dropdown_strategy.get()
             self.workflow_params["strategy"] = strategy
+            
+            self.workflow_params["batch_size"] = int(self.entry_batch_size.get()) if self.entry_batch_size.get().isdigit() else 1
 
             if strategy == "FEW SHOT":
                 fs_count = self.entry_fs_count.get()
@@ -318,29 +343,29 @@ class ERWorkflow:
 
             # --- 4. CLUSTERING ---
             self.workflow_params["clustering_algorithm"] = self.dropdown_cluster.get()
-            
+
             cluster_thresh = self.entry_cluster_threshold.get()
             self.workflow_params["clustering_threshold"] = float(cluster_thresh) if cluster_thresh else 0.75
 
             # =========================================
             # SUCCESS OUTPUT
             # =========================================
-            
-            
-            
+
+
+
             print("\n[ SYSTEM LOG ]: WORKFLOW PARAMETERS INITIALIZED")
             print("==================================================")
             for key, value in self.workflow_params.items():
                 print(f"{key.upper()}: {value}")
             print("==================================================\n")
-           
-           
+
+
             self.main_frame.forget()
             self.next_frame.data = self.data
             self.next_frame.workflow_params = self.workflow_params
             self.next_frame.main_frame.pack(fill="both", expand=True)
             self.next_frame.start_processing()
-            
+
             # Optional: Show a UI popup confirming success
             # messagebox.showinfo("System Link", "ER Workflow successfully initialized!")
 
@@ -349,8 +374,8 @@ class ERWorkflow:
         except ValueError:
             # This triggers if float() fails (e.g., they typed "abc" into the threshold box)
             messagebox.showerror("Data Error", "Invalid input detected. Please ensure your thresholds are formatted as valid numbers (e.g., 0.75).")
-        
-    
+
+
     def toggle_fs_options(self, value):
         """Dynamically shows or hides the FS order dropdown based on strategy selection."""
         if value == "Few-Shot (FS)":
@@ -368,7 +393,7 @@ class ERWorkflow:
         if value == "KNN Search":
             # Pack it slightly indented with pady to look like a dropdown section
             self.frame_knn_options.pack(anchor="w", fill="x", pady=(10, 0), padx=(20, 0))
-            
+
             # Immediately check if qgrams is the default so it paints correctly
             self.toggle_qgram_options(self.knn_tokenization.get())
         else:
@@ -389,9 +414,9 @@ class ERWorkflow:
         else:
             # Hide it if ZERO SHOT is selected
             self.frame_fs_options.pack_forget()
-    
-    
-    
+
+
+
     def scroll_with_mousewheel(self, event):
         """Forces the scrollable frame to move when the mouse wheel is spun."""
         try:
@@ -399,15 +424,15 @@ class ERWorkflow:
             if event.delta:
                 # event.delta is usually 120 or -120. We divide by 120 to move 1 unit.
                 self.scroll_container._parent_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-            
+
             # For Linux
             elif event.num == 4:
                 self.scroll_container._parent_canvas.yview_scroll(-1, "units")
             elif event.num == 5:
                 self.scroll_container._parent_canvas.yview_scroll(1, "units")
-                
+
         except Exception:
             # Pass silently if the scroll container doesn't exist yet or is hidden
             pass
-        
-    
+
+

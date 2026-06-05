@@ -9,6 +9,7 @@ import pandas as pd
 
 from er_workflow import ERWorkflow
 from er_execution import ERExecution
+from er_final import ERFinal
 
 ctk.set_appearance_mode("dark")  # Forces dark mode
 ctk.set_default_color_theme("blue")  # Base theme
@@ -41,6 +42,10 @@ class ChatMatcherApp:
         self.er_execution = ERExecution(self.root, "transparent")
         self.er_workflow.next_frame = self.er_execution
         self.er_execution.build()
+        
+        
+        
+        # self.choose_linkage_type.main_frame.pack(fill="both", expand=True)
         self.er_workflow.main_frame.pack(fill="both", expand=True)
         
     def lose_focus_on_click(self, event):

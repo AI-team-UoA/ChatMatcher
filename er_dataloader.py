@@ -7,12 +7,12 @@ from er_workflow import ERWorkflow
 class ERDataloader:
     main_frame : ctk.CTkFrame
     next_frame : ERWorkflow
-    
+
     def __init__(self, master, color):
         self.master = master
         self.main_frame = ctk.CTkFrame(master, fg_color=color)
 
-    
+
     def build(self):
         container = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         container.pack(fill="both", expand=True, padx=10)  # Added slight padding to the main container
@@ -58,6 +58,10 @@ class ERDataloader:
                                        border_color="#333333")
         self.entry_id_1.pack(pady=20)
 
+        self.entry_nrows_1 = ctk.CTkEntry(dataset_container_1, placeholder_text="Max Rows (blank for all)", width=220,
+                                       border_color="#333333")
+        self.entry_nrows_1.pack(pady=(0, 20))
+
         btn_load_dataset_1 = ctk.CTkButton(dataset_container_1, text="[ UPLOAD ]", font=("Courier", 14, "bold"),
                                            fg_color="transparent", border_width=2, text_color="#00ffcc",
                                            border_color="#00ffcc", hover_color="#004d40",
@@ -82,7 +86,10 @@ class ERDataloader:
         self.entry_id_2 = ctk.CTkEntry(dataset_container_2, placeholder_text="ID column (e.g., patient_id)", width=220,
                                        border_color="#333333")
         self.entry_id_2.pack(pady=20)
+        self.entry_nrows_2 = ctk.CTkEntry(dataset_container_2, placeholder_text="Max Rows (blank for all)", width=220,
+                                        border_color="#333333")
 
+        self.entry_nrows_2.pack(pady=(0, 20))
         btn_load_dataset_2 = ctk.CTkButton(dataset_container_2, text="[ UPLOAD ]", font=("Courier", 14, "bold"),
                                            fg_color="transparent", border_width=2, text_color="#00ffcc",
                                            border_color="#00ffcc", hover_color="#004d40",
@@ -134,13 +141,17 @@ class ERDataloader:
                 user_sep = self.entry_sep_1.get()
                 user_id_col = self.entry_id_1.get()
 
-                self.df_1 = pd.read_csv(filepath, sep=user_sep).astype(str)
+                raw_nrows = self.entry_nrows_1.get().strip()
+                user_nrows = int(raw_nrows) if raw_nrows.isdigit() else None
+
+
+                self.df_1 = pd.read_csv(filepath, sep=user_sep, nrows=user_nrows).astype(str)
                 print(self.df_1)
                 # If they forgot to type an ID, stop immediately
                 if not user_id_col:
                     self.lbl_status_1.configure(text="[ ERROR ]: Please type an ID Column Name.", text_color="#ff3333")
                     return
-                
+
                 if user_id_col not in self.df_1.columns:
                     self.lbl_status_1.configure(
                         text=f"[ ERROR ]: Column {user_id_col} not found in CSV file.",
@@ -158,7 +169,9 @@ class ERDataloader:
             elif dataset_num == 2:
                 user_sep = self.entry_sep_2.get()
                 user_id_col = self.entry_id_2.get()
-                self.df_2 = pd.read_csv(filepath, sep=user_sep).astype(str)
+                raw_nrows = self.entry_nrows_2.get().strip()
+                user_nrows = int(raw_nrows) if raw_nrows.isdigit() else None
+                self.df_2 = pd.read_csv(filepath, sep=user_sep, nrows=user_nrows).astype(str)
                 if user_id_col not in self.df_2.columns:
                     self.lbl_status_2.configure(
                         text=f"[ ERROR ]: Column {user_id_col} not found in CSV file.",
@@ -176,6 +189,9 @@ class ERDataloader:
             elif dataset_num == 3:
                 user_sep = self.entry_sep_gt.get()
                 self.ground_truth = pd.read_csv(filepath, sep=user_sep).astype(str)
+
+
+
 
                 self.lbl_status_gt.configure(
                     text=f"[ SUCCESS ]: CSV file loaded successfully.\n{len(self.ground_truth)} records loaded.",
@@ -241,16 +257,32 @@ class ERDataloader:
         # 5. Lock the textbox so the user can't accidentally type in it
         txt_data.configure(state="disabled")
 
-    
+
     def go_to_workflow(self):
         if self.dataset_1_loaded:
             self.main_frame.forget()
-            
+
+            if self.dataset_1_loaded and not self.dataset_2_loaded and self.ground_truth_loaded:
+                ids = self.df_1[self.entry_id_1.get()].tolist()
+
+                self.ground_truth.columns = ["D1", "D2"]
+                self.ground_truth = self.ground_truth[self.ground_truth["D1"].isin(ids)]
+                self.ground_truth = self.ground_truth[self.ground_truth["D2"].isin(ids)]
+
+            elif self.dataset_1_loaded and self.dataset_2_loaded and self.ground_truth_loaded:
+                ids_1 = self.df_1[self.entry_id_1.get()].tolist()
+                ids_2 = self.df_2[self.entry_id_2.get()].tolist()
+
+                self.ground_truth.columns = ["D1", "D2"]
+                self.ground_truth = self.ground_truth[self.ground_truth["D1"].isin(ids_1)]
+                self.ground_truth = self.ground_truth[self.ground_truth["D2"].isin(ids_2)]
+
+
             self.next_frame.data = Data(
                 dataset_1=self.df_1,
                 dataset_2=self.df_2 if hasattr(self, 'dataset_2_loaded') else None,
                 ground_truth=self.ground_truth if hasattr(self, 'ground_truth_loaded') else None,
                 id_column_name_1=self.entry_id_1.get(),
-                id_column_name_2=self.entry_id_2.get() if hasattr(self, 'dataset_2_loaded') else None    
+                id_column_name_2=self.entry_id_2.get() if hasattr(self, 'dataset_2_loaded') else None
             )
             self.next_frame.main_frame.pack(fill="both", expand=True)
