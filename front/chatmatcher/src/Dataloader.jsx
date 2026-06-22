@@ -27,11 +27,11 @@ export default function DataLoader() {
           rows,
           // Only auto-assign ID column for Dataset 1 and 2
           idColumn: datasetKey !== 'groundTruth' ? (prev[datasetKey].idColumn || headers[0] || '') : '',
-          attributes: [] 
+          attributes: []
         },
       }));
     };
-    
+
     reader.readAsText(file.slice(0, 5000));
   };
 
@@ -48,7 +48,7 @@ export default function DataLoader() {
   const handleFileChange = (datasetKey, event) => {
     const file = event.target.files[0];
     handleChange(datasetKey, 'file', file);
-    
+
     const currentSeparator = uploadData[datasetKey].separator;
     parseAndPreviewCSV(file, currentSeparator, datasetKey);
   };
@@ -59,7 +59,7 @@ export default function DataLoader() {
 
     setUploadData((prev) => {
       const currentDataset = prev[datasetKey];
-      
+
       if (headerName === currentDataset.idColumn) return prev;
 
       const isSelected = currentDataset.attributes.includes(headerName);
@@ -78,6 +78,72 @@ export default function DataLoader() {
   };
 
   const handleProcessData = () => {
+
+    if (!uploadData.dataset1.file) {
+      alert('Please upload a file for Dataset 1.');
+      return;
+    }
+
+    if (uploadData.dataset1.file) {
+      const formData = new FormData();
+      formData.append("file", uploadData.dataset1.file);
+      console.log(uploadData.dataset1.separator);
+      
+      formData.append("separator", uploadData.dataset1.separator);
+
+
+
+      fetch('http://localhost:8000/upload_dataset_1', {
+        method: 'POST',
+        body: formData,
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log('Dataset 1 uploaded successfully:', data);
+      })
+      .catch(error => {
+        console.error('Error uploading Dataset 1:', error);
+      });
+
+    }
+
+    if (uploadData.dataset2.file) {
+      const formData = new FormData();
+      formData.append("file", uploadData.dataset2.file);
+      formData.append("separator", uploadData.dataset2.separator);
+
+      fetch('http://localhost:8000/upload_dataset_2', {
+        method: 'POST',
+        body: formData,
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log('Dataset 2 uploaded successfully:', data);
+      })
+      .catch(error => {
+        console.error('Error uploading Dataset 2:', error);
+      });
+    }
+
+    if (uploadData.groundTruth.file) {
+      const formData = new FormData();
+      formData.append("file", uploadData.groundTruth.file);
+      formData.append("separator", uploadData.groundTruth.separator);
+      
+      fetch('http://localhost:8000/upload_ground_truth', {
+        method: 'POST',
+        body: formData,
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log('Ground Truth uploaded successfully:', data);
+      })
+      .catch(error => {
+        console.error('Error uploading Ground Truth:', error);
+      });
+    }
+
+    
     console.log('Ready to process:', uploadData);
     alert('Check your browser console to see the captured data and selected attributes!');
   };
@@ -164,26 +230,26 @@ export default function DataLoader() {
                 {data.file.name} ({(data.file.size / 1024).toFixed(1)} KB)
               </span>}
             </div>
-            
+
             <div style={styles.formGroup}>
               <label style={styles.label}>CSV File:</label>
-              <input 
-                type="file" 
+              <input
+                type="file"
                 accept=".csv"
                 style={styles.fileInput}
-                onChange={(e) => handleFileChange(ds.key, e)} 
+                onChange={(e) => handleFileChange(ds.key, e)}
               />
-              
+
               <label style={styles.label}>Separator:</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 maxLength="3"
                 style={{ ...styles.input, width: '50px', textAlign: 'center' }}
-                value={data.separator} 
+                value={data.separator}
                 onChange={(e) => {
-                  handleChange(ds.key, 'separator', e.target.value);
+                  handleChange(ds.key, "separator", e.target.value);
                   if (data.file) parseAndPreviewCSV(data.file, e.target.value, ds.key);
-                }} 
+                }}
                 placeholder=","
               />
 
@@ -191,7 +257,7 @@ export default function DataLoader() {
               {!isGroundTruth && (
                 <>
                   <label style={styles.label} style={{ marginLeft: '10px' }}>ID Column:</label>
-                  <select 
+                  <select
                     style={styles.select}
                     value={data.idColumn}
                     onChange={(e) => handleChange(ds.key, 'idColumn', e.target.value)}
@@ -214,7 +280,7 @@ export default function DataLoader() {
                     <strong>Select Attributes:</strong> Click the column headers below to select the attributes you want to use for matching.
                   </div>
                 )}
-                
+
                 <div style={styles.tableWrapper}>
                   <table style={styles.table}>
                     <thead>
@@ -232,15 +298,15 @@ export default function DataLoader() {
                           // For Datasets 1 & 2, render interactive headers
                           const isId = data.idColumn === header;
                           const isAttribute = data.attributes.includes(header);
-                          
+
                           return (
-                            <th 
-                              key={index} 
+                            <th
+                              key={index}
                               style={styles.thInteractive(isId, isAttribute)}
                               onClick={() => toggleAttribute(ds.key, header)}
                               title={isId ? "ID column cannot be an attribute" : "Click to select as an attribute"}
                             >
-                              {header} 
+                              {header}
                               {isAttribute && ' ✓'}
                               {isId && <span style={styles.badge}>ID</span>}
                             </th>
