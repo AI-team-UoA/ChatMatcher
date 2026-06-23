@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import DataLoader from './Dataloader';
+import WorkflowSelection from './WorkflowSelection';
+import WorkflowConfigER from './WorkflowConfigER';
 
 function App() {
   // Track the current step (1 to 5)
   const [currentStep, setCurrentStep] = useState(1);
+
+  const [workflow, setWorkflow] = useState(null);
 
   // Define our 5-step flow
   const steps = [
@@ -154,27 +158,36 @@ function App() {
         {currentStep === 1 && (
           <div>
             <div style={styles.welcomeHeader}>
-              <h1>Welcome to ChatMatcher</h1>
+              <h1>Welcome to DataLinker Studio</h1>
               <p>Start by securely loading your datasets below to begin the matching process.</p>
             </div>
-            {/* Reusing the DataLoader component we built previously */}
-            <DataLoader />
+            {/* Pass the handleNext function down to track the upload completions */}
+            <DataLoader onUploadSuccess={handleNext} />
           </div>
         )}
 
         {currentStep === 2 && (
           <div style={{ textAlign: 'center', marginTop: '50px', color: '#7f8c8d' }}>
-            <h2>Step 2: Choose Workflow</h2>
-            <p>UI for selecting Entity Resolution vs. PPRL goes here.</p>
+            <WorkflowSelection 
+              selectedWorkflow={workflow} 
+              onSelectWorkflow={setWorkflow} 
+            />
           </div>
         )}
 
         {currentStep === 3 && (
-          <div style={{ textAlign: 'center', marginTop: '50px', color: '#7f8c8d' }}>
-            <h2>Step 3: Configure</h2>
-            <p>UI for mapping columns and setting thresholds goes here.</p>
+          <div>
+            {workflow === 'ER' ? (
+              <WorkflowConfigER onSaveConfig={() => handleNext()} />
+            ) : (
+              <div style={{ textAlign: 'center', marginTop: '50px', color: '#7f8c8d' }}>
+                <h2>Step 3: Configure</h2>
+              </div>
+            )}
           </div>
         )}
+
+
 
         {currentStep === 4 && (
           <div style={{ textAlign: 'center', marginTop: '50px', color: '#7f8c8d' }}>

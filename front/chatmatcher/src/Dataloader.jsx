@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function DataLoader() {
+export default function DataLoader( { onUploadSuccess }) {
   const [uploadData, setUploadData] = useState({
     dataset1: { file: null, separator: ',', idColumn: '', attributes: [], headers: [], rows: [] },
     dataset2: { file: null, separator: ',', idColumn: '', attributes: [], headers: [], rows: [] },
@@ -78,74 +78,70 @@ export default function DataLoader() {
   };
 
   const handleProcessData = () => {
-
+    // 1. Enforce that at least Dataset 1 is present before advancing
     if (!uploadData.dataset1.file) {
-      alert('Please upload a file for Dataset 1.');
+      alert('Please upload at least Dataset 1.');
       return;
     }
 
+    // This array will hold the promises for any active upload requests
+    const uploadPromises = [];
+
+    // --- Dataset 1 ---
     if (uploadData.dataset1.file) {
       const formData = new FormData();
       formData.append("file", uploadData.dataset1.file);
-      console.log(uploadData.dataset1.separator);
-      
       formData.append("separator", uploadData.dataset1.separator);
 
-
-
-      fetch('http://localhost:8000/upload_dataset_1', {
-        method: 'POST',
-        body: formData,
-      })
-      .then(response => response.json())
-      .then(data => {
-        console.log('Dataset 1 uploaded successfully:', data);
-      })
-      .catch(error => {
-        console.error('Error uploading Dataset 1:', error);
-      });
-
+      const p1 = fetch('http://localhost:8000/upload_dataset_1', { method: 'POST', body: formData })
+        .then(response => {
+          if (!response.ok) throw new Error('Dataset 1 upload failed');
+          return response.json();
+        });
+      uploadPromises.push(p1);
     }
 
+    // --- Dataset 2 ---
     if (uploadData.dataset2.file) {
       const formData = new FormData();
       formData.append("file", uploadData.dataset2.file);
       formData.append("separator", uploadData.dataset2.separator);
 
-      fetch('http://localhost:8000/upload_dataset_2', {
-        method: 'POST',
-        body: formData,
-      })
-      .then(response => response.json())
-      .then(data => {
-        console.log('Dataset 2 uploaded successfully:', data);
-      })
-      .catch(error => {
-        console.error('Error uploading Dataset 2:', error);
-      });
+      const p2 = fetch('http://localhost:8000/upload_dataset_2', { method: 'POST', body: formData })
+        .then(response => {
+          if (!response.ok) throw new Error('Dataset 2 upload failed');
+          return response.json();
+        });
+      uploadPromises.push(p2);
     }
 
+    // --- Ground Truth (Optional) ---
     if (uploadData.groundTruth.file) {
       const formData = new FormData();
       formData.append("file", uploadData.groundTruth.file);
       formData.append("separator", uploadData.groundTruth.separator);
-      
-      fetch('http://localhost:8000/upload_ground_truth', {
-        method: 'POST',
-        body: formData,
-      })
-      .then(response => response.json())
-      .then(data => {
-        console.log('Ground Truth uploaded successfully:', data);
-      })
-      .catch(error => {
-        console.error('Error uploading Ground Truth:', error);
-      });
+
+      const p3 = fetch('http://localhost:8000/upload_ground_truth', { method: 'POST', body: formData })
+        .then(response => {
+          if (!response.ok) throw new Error('Ground Truth upload failed');
+          return response.json();
+        });
+      uploadPromises.push(p3);
     }
 
-    
-    console.log('Ready to process:', uploadData);
-    alert('Check your browser console to see the captured data and selected attributes!');
+    // 2. Wait for all active uploads to finish successfully
+    Promise.all(uploadPromises)
+      .then((results) => {
+        console.log('All datasets successfully sent to backend:', results);
+        // Execute the prop callback to notify App.jsx to move to Step 2
+        if (onUploadSuccess) {
+          onUploadSuccess();
+        }
+      })
+      .catch(error => {
+        console.error('An error occurred during pipeline upload:', error);
+        alert(`Upload error: ${error.message}. Please verify your local backend server is running.`);
+      });
   };
 
   const styles = {
