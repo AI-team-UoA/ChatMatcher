@@ -7,12 +7,13 @@ export default function WorkflowConfigER({ onSaveConfig }) {
     knnMetric: 'cosine',
     knnTopK: 5,
     knnTokenization: 'standard',
+    qGramSize: 2, // Added this to prevent undefined errors when selecting Q-Grams
     model: 'phi3',
     strategy: 'zero_shot',
     batchSize: 4,
     fewShotNumExamples: 2,
     fewShotOrder: 'true_false',
-    promptTemplate: 'Determine if Document A and Document B refer to the same real-world entity.\n\nDocument A: {record1}\nDocument B: {record2}\n\nAnswer only with Yes or No.',
+    promptTemplate: 'Determine if Record A and Record B refer to the same real-world entity.',
     enableClustering: false,
     clusteringMethod: 'unique_mapping',
     similarityThreshold: 0.5,
@@ -27,6 +28,9 @@ export default function WorkflowConfigER({ onSaveConfig }) {
     console.log('ER Configuration Saved:', config);
     if (onSaveConfig) onSaveConfig(config);
   };
+
+  // Construct the preview string
+  const finalPromptPreview = `${config.promptTemplate}\n\nRecord A: {Record 1}\nRecord B: {Record 2}\n\nAnswer with true/false`;
 
   // --- Theme Styles ---
   const styles = {
@@ -175,16 +179,27 @@ export default function WorkflowConfigER({ onSaveConfig }) {
             value={config.promptTemplate}
             onChange={(e) => handleChange('promptTemplate', e.target.value)}
           />
-          <span style={{ fontSize: '0.8rem', color: '#7f8c8d' }}>
-            Use context wrappers <code>{'{record1}'}</code> and <code>{'{record2}'}</code> where the matched row elements should be dynamically injected.
-          </span>
+          
+          <label style={styles.label}>Final Prompt Preview</label>
+          <textarea
+            style={{
+              ...styles.textarea,
+              backgroundColor: '#f8f9fa',
+              color: '#7f8c8d',           
+              cursor: 'not-allowed',      
+              minHeight: '150px'          
+            }}
+            value={finalPromptPreview}    
+            readOnly                      
+          />
         </div>
       </div>
 
       {/* SECTION 4: CLUSTERING */}
       <div style={styles.sectionCard}>
         <div style={styles.checkboxRow} onClick={() => handleChange('enableClustering', !config.enableClustering)}>
-          <input type="checkbox" checked={config.enableClustering} onChange={() => {}} style={{ cursor: 'pointer', scale: '1.2' }} />
+          {/* Replaced 'scale' with standard 'transform' to avoid css parsing issues */}
+          <input type="checkbox" checked={config.enableClustering} onChange={() => {}} style={{ cursor: 'pointer', transform: 'scale(1.2)' }} />
           <h3 style={{ ...styles.sectionTitle, marginBottom: '0' }}>4. Post-Process Clustering (Optional)</h3>
         </div>
 

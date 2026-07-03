@@ -7,34 +7,63 @@ export default function DataLoader( { onUploadSuccess }) {
     groundTruth: { file: null, separator: ',', idColumn: '', attributes: [], headers: [], rows: [] },
   });
 
-  const parseAndPreviewCSV = (file, separator, datasetKey) => {
-    if (!file) return;
+  const parseAndPreviewCSV = (file, datasetKey, manualSeparator = null) => {
+  if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target.result;
-      const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-      if (lines.length === 0) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+    if (lines.length === 0) return;
 
-      const headers = lines[0].split(separator).map(h => h.trim());
-      const rows = lines.slice(1, 11).map(line => line.split(separator).map(cell => cell.trim()));
+    const firstLine = lines[0];
 
-      setUploadData((prev) => ({
-        ...prev,
-        [datasetKey]: {
-          ...prev[datasetKey],
-          headers,
-          rows,
-          // Only auto-assign ID column for Dataset 1 and 2
-          idColumn: datasetKey !== 'groundTruth' ? (prev[datasetKey].idColumn || headers[0] || '') : '',
-          attributes: []
-        },
-      }));
-    };
+    // 1. AUTO-DETECT SEPARATOR
+    // We test common delimiters and see which one creates the most columns
+    const separators = [',', ';', '\t', '|', '#'];
+    let detectedSeparator = ',';
+    let maxColumns = 0;
 
-    reader.readAsText(file.slice(0, 5000));
+    separators.forEach(sep => {
+      const columnCount = firstLine.split(sep).length;
+      if (columnCount > maxColumns) {
+        maxColumns = columnCount;
+        detectedSeparator = sep;
+      }
+    });
+
+    const activeSeparator = manualSeparator || detectedSeparator;
+
+    // 2. AUTO-DETECT ROWS
+    // Total rows minus the header row
+    const totalRowsInFile = lines.length - 1;
+
+    // We cap the preview to 10 rows so the browser doesn't freeze on huge files,
+    // but if the file has fewer than 10 rows, we just show what's there.
+    const safeDisplayLimit = Math.min(totalRowsInFile, 10);
+
+    const headers = firstLine.split(activeSeparator).map(h => h.trim());
+    const rows = lines.slice(1, safeDisplayLimit + 1).map(line => line.split(activeSeparator).map(cell => cell.trim()));
+
+    setUploadData((prev) => ({
+      ...prev,
+      [datasetKey]: {
+        ...prev[datasetKey],
+        headers,
+        rows,
+        separator: activeSeparator,        // Use manual separator if provided, otherwise use detected
+        maxRows: totalRowsInFile,         // Automatically apply the safe row count
+        totalRows: totalRowsInFile,        // Save the total rows in case you want to display it
+        idColumn: datasetKey !== 'groundTruth' ? (prev[datasetKey].idColumn || headers[0] || '') : '',
+        attributes: []
+      },
+    }));
   };
 
+  // Note: We read the first 50,000 bytes. This is plenty to detect headers
+  // and get a safe preview without choking the browser on multi-gigabyte files.
+  reader.readAsText(file);
+};
   const handleChange = (datasetKey, field, value) => {
     setUploadData((prev) => ({
       ...prev,
@@ -49,9 +78,9 @@ export default function DataLoader( { onUploadSuccess }) {
     const file = event.target.files[0];
     handleChange(datasetKey, 'file', file);
 
-    const currentSeparator = uploadData[datasetKey].separator;
-    parseAndPreviewCSV(file, currentSeparator, datasetKey);
-  };
+    // Just pass the file and the key; the function will do the rest!
+    parseAndPreviewCSV(file, datasetKey);
+};
 
   const toggleAttribute = (datasetKey, headerName) => {
     // Prevent toggling attributes for Ground Truth
@@ -133,6 +162,40 @@ export default function DataLoader( { onUploadSuccess }) {
     Promise.all(uploadPromises)
       .then((results) => {
         console.log('All datasets successfully sent to backend:', results);
+
+
+        const configFormData = new FormData();
+        if (uploadData.dataset1.file) {
+          configFormData.append("id_1", uploadData.dataset1.idColumn || "");
+          configFormData.append("num_rows_1", uploadData.dataset1.maxRows || 0);
+
+          // FastAPI list=Form() expects multiple appends of the same key
+          uploadData.dataset1.attributes.forEach(attr => {
+            configFormData.append("attributes_1", attr);
+          });
+        }
+
+        if (uploadData.dataset2.file) {
+          configFormData.append("id_2", uploadData.dataset2.idColumn || "");
+          configFormData.append("num_rows_2", uploadData.dataset2.maxRows || 0);
+
+          uploadData.dataset2.attributes.forEach(attr => {
+            configFormData.append("attributes_2", attr);
+          });
+        }
+
+        return fetch('http://localhost:8000/pyjedai/load_data', {
+          method: 'POST',
+          body: configFormData
+          });
+        })
+       .then(configResponse => {
+          if (!configResponse.ok) throw new Error('Failed to load datamodel configuration in backend');
+          return configResponse.json();
+        })
+        .then(configResult => {
+          console.log('Datamodel successfully configured:', configResult);
+
         // Execute the prop callback to notify App.jsx to move to Step 2
         if (onUploadSuccess) {
           onUploadSuccess();
@@ -142,6 +205,9 @@ export default function DataLoader( { onUploadSuccess }) {
         console.error('An error occurred during pipeline upload:', error);
         alert(`Upload error: ${error.message}. Please verify your local backend server is running.`);
       });
+
+
+
   };
 
   const styles = {
@@ -163,7 +229,7 @@ export default function DataLoader( { onUploadSuccess }) {
     submitButton: {
       padding: '12px 24px', backgroundColor: '#3498db', color: 'white', border: 'none',
       borderRadius: '4px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer',
-      alignSelf: 'flex-start', marginTop: '10px',
+      alignSelf: 'center', marginTop: '10px',
     },
     instructions: { fontSize: '0.9rem', color: '#7f8c8d', marginTop: '15px', marginBottom: '5px' },
     tableWrapper: {
@@ -244,10 +310,30 @@ export default function DataLoader( { onUploadSuccess }) {
                 value={data.separator}
                 onChange={(e) => {
                   handleChange(ds.key, "separator", e.target.value);
-                  if (data.file) parseAndPreviewCSV(data.file, e.target.value, ds.key);
+                  if (data.file) parseAndPreviewCSV(data.file, ds.key, e.target.value);
                 }}
                 placeholder=","
               />
+              {/* Rows Input Field */}
+              {/* Rows now represent Backend Processing limit, NOT UI preview */}
+
+              {!isGroundTruth && (
+                <>
+              <label style={{ ...styles.label, marginLeft: '5px' }}>Process Rows:</label>
+              <input
+                type="number"
+                min="1"
+                style={{ ...styles.input, width: '80px', textAlign: 'center' }}
+                value={data.maxRows || ''}
+                onChange={(e) => {
+                  // Simply update the state. We don't call parseAndPreviewCSV because
+                  // we are no longer altering the UI table preview, just the backend limit.
+                  handleChange(ds.key, "maxRows", e.target.value);
+                }}
+                />
+                </>
+              )
+              }
 
               {/* Conditionally render the ID column dropdown only if it's NOT ground truth */}
               {!isGroundTruth && (

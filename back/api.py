@@ -148,8 +148,10 @@ async def upload_file_ground_truth(file: UploadFile = File(...),
 async def create_datamodel_pyjedai(
         id_1: str = Form(default=None),
         attributes_1: list = Form(default=None),
+        num_rows_1: int = Form(default=None),
         id_2: str = Form(default=None),
         attributes_2: list = Form(default=None),
+        num_rows_2: int = Form(default=None),
 ):
 
     df_1 = pd.read_parquet(DATASET_1_PATH)
@@ -164,6 +166,15 @@ async def create_datamodel_pyjedai(
     else:
         df_ground_truth = None
 
+    if num_rows_1 is not None:
+        df_1 = df_1.head(num_rows_1)
+
+    if num_rows_2 is not None and df_2 is not None:
+        df_2 = df_2.head(num_rows_2)
+
+
+    print(f"{df_1.shape[0]} rows in dataset 1")
+
     data = Data(
         dataset_1=df_1,
         dataset_2=df_2,
@@ -173,7 +184,10 @@ async def create_datamodel_pyjedai(
         id_column_name_2=id_2,
         attributes_2=attributes_2
     )
-
+    print(f"DataModel created with {len(data.dataset_1)} rows in dataset 1 and {len(data.dataset_2) if data.dataset_2 is not None else 0} rows in dataset 2")
+    print(f"Ground truth has {len(data.ground_truth) if data.ground_truth is not None else 0} rows")
+    print(f"Attributes for dataset 1: {data.attributes_1}")
+    print(f"Attributes for dataset 2: {data.attributes_2}")
 
     with open(PYJEDAI_DATA_PICKLE, 'wb+') as f:
         pickle.dump(data, f)
