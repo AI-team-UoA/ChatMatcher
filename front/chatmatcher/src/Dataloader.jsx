@@ -1,437 +1,348 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
+import {
+  Card,
+  Title,
+  Text,
+  Badge,
+  Table,
+  TableHead,
+  TableRow,
+  TableHeaderCell,
+  TableBody,
+  TableCell,
+} from "@tremor/react";
 
-export default function DataLoader( { onUploadSuccess }) {
-  const [uploadData, setUploadData] = useState({
-    dataset1: { file: null, separator: ',', idColumn: '', attributes: [], headers: [], rows: [] },
-    dataset2: { file: null, separator: ',', idColumn: '', attributes: [], headers: [], rows: [] },
-    groundTruth: { file: null, separator: ',', idColumn: '', attributes: [], headers: [], rows: [] },
-  });
+interface FileConfig {
+  file: File | null;
+  rawText: string;
+  separator: string;
+  headers: string[];
+  previewRows: string[][];
+  totalRowsEstimate: number;
+}
 
-  const parseAndPreviewCSV = (file, datasetKey, manualSeparator = null) => {
-  if (!file) return;
+const emptyFileConfig = (): FileConfig => ({
+  file: null,
+  rawText: "",
+  separator: ",",
+  headers: [],
+  previewRows: [],
+  totalRowsEstimate: 0,
+});
 
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const text = e.target.result;
-    const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-    if (lines.length === 0) return;
+export default function NewMatchingProject({ onCancel }: { onCancel?: () => void }) {
+  const [projectName, setProjectName] = useState("");
+  const [description, setDescription] = useState("");
+
+  const [d1, setD1] = useState<FileConfig>(emptyFileConfig());
+  const [d2, setD2] = useState<FileConfig>(emptyFileConfig());
+  const [gt, setGt] = useState<FileConfig>(emptyFileConfig());
+
+  const [activePreview, setActivePreview] = useState<"d1" | "d2" | "gt">("d1");
+
+  // 1. New Auto-Detect Logic
+  const autoDetectSeparator = (text: string) => {
+    const lines = text.split(/\r\n|\n/).filter((line) => line.trim().length > 0);
+    if (lines.length === 0) return ",";
 
     const firstLine = lines[0];
+    const separators = [",", ";", "\t", "|", "#"];
+    let maxCols = 0;
+    let detected = ",";
 
-    // 1. AUTO-DETECT SEPARATOR
-    // We test common delimiters and see which one creates the most columns
-    const separators = [',', ';', '\t', '|', '#'];
-    let detectedSeparator = ',';
-    let maxColumns = 0;
-
-    separators.forEach(sep => {
-      const columnCount = firstLine.split(sep).length;
-      if (columnCount > maxColumns) {
-        maxColumns = columnCount;
-        detectedSeparator = sep;
+    separators.forEach((sep) => {
+      const count = firstLine.split(sep).length;
+      if (count > maxCols) {
+        maxCols = count;
+        detected = sep;
       }
     });
 
-    const activeSeparator = manualSeparator || detectedSeparator;
-
-    // 2. AUTO-DETECT ROWS
-    // Total rows minus the header row
-    const totalRowsInFile = lines.length - 1;
-
-    // We cap the preview to 10 rows so the browser doesn't freeze on huge files,
-    // but if the file has fewer than 10 rows, we just show what's there.
-    const safeDisplayLimit = Math.min(totalRowsInFile, 10);
-
-    const headers = firstLine.split(activeSeparator).map(h => h.trim());
-    const rows = lines.slice(1, safeDisplayLimit + 1).map(line => line.split(activeSeparator).map(cell => cell.trim()));
-
-    setUploadData((prev) => ({
-      ...prev,
-      [datasetKey]: {
-        ...prev[datasetKey],
-        headers,
-        rows,
-        separator: activeSeparator,        // Use manual separator if provided, otherwise use detected
-        maxRows: totalRowsInFile,         // Automatically apply the safe row count
-        totalRows: totalRowsInFile,        // Save the total rows in case you want to display it
-        idColumn: datasetKey !== 'groundTruth' ? (prev[datasetKey].idColumn || headers[0] || '') : '',
-        attributes: []
-      },
-    }));
+    return detected;
   };
 
-  // Note: We read the first 50,000 bytes. This is plenty to detect headers
-  // and get a safe preview without choking the browser on multi-gigabyte files.
-  reader.readAsText(file);
-};
-  const handleChange = (datasetKey, field, value) => {
-    setUploadData((prev) => ({
-      ...prev,
-      [datasetKey]: {
-        ...prev[datasetKey],
-        [field]: value
-      }
-    }));
+  const parseContent = (text: string, sep: string) => {
+    const lines = text.split(/\r\n|\n/).filter((line) => line.trim().length > 0);
+    if (lines.length === 0) return { headers: [], previewRows: [], totalRowsEstimate: 0 };
+
+    const headers = lines[0].split(sep).map((h) => h.trim().replace(/^["']|["']$/g, ""));
+    const previewRows = lines
+      .slice(1, 11)
+      .map((line) => line.split(sep).map((cell) => cell.trim().replace(/^["']|["']$/g, "")));
+
+    return {
+      headers,
+      previewRows,
+      totalRowsEstimate: Math.max(0, lines.length - 1),
+    };
   };
 
-  const handleFileChange = (datasetKey, event) => {
-    const file = event.target.files[0];
-    handleChange(datasetKey, 'file', file);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, target: "d1" | "d2" | "gt") => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
 
-    // Just pass the file and the key; the function will do the rest!
-    parseAndPreviewCSV(file, datasetKey);
-};
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const setter = target === "d1" ? setD1 : target === "d2" ? setD2 : setGt;
+      const current = target === "d1" ? d1 : target === "d2" ? d2 : gt;
 
-  const toggleAttribute = (datasetKey, headerName) => {
-    // Prevent toggling attributes for Ground Truth
-    if (datasetKey === 'groundTruth') return;
+      // Automatically detect the delimiter on file load
+      const detectedSep = autoDetectSeparator(text);
+      const parsed = parseContent(text, detectedSep);
 
-    setUploadData((prev) => {
-      const currentDataset = prev[datasetKey];
-
-      if (headerName === currentDataset.idColumn) return prev;
-
-      const isSelected = currentDataset.attributes.includes(headerName);
-      const newAttributes = isSelected
-        ? currentDataset.attributes.filter(attr => attr !== headerName)
-        : [...currentDataset.attributes, headerName];
-
-      return {
-        ...prev,
-        [datasetKey]: {
-          ...currentDataset,
-          attributes: newAttributes
-        }
-      };
-    });
+      setter({
+        ...current,
+        file: selectedFile,
+        rawText: text,
+        separator: detectedSep, // Apply detected separator
+        headers: parsed.headers,
+        previewRows: parsed.previewRows,
+        totalRowsEstimate: parsed.totalRowsEstimate,
+      });
+      setActivePreview(target);
+    };
+    reader.readAsText(selectedFile);
   };
 
-  const handleProcessData = () => {
-    // 1. Enforce that at least Dataset 1 is present before advancing
-    if (!uploadData.dataset1.file) {
-      alert('Please upload at least Dataset 1.');
+  const handleSeparatorChange = (sep: string, target: "d1" | "d2" | "gt") => {
+    const setter = target === "d1" ? setD1 : target === "d2" ? setD2 : setGt;
+    const current = target === "d1" ? d1 : target === "d2" ? d2 : gt;
+
+    if (!current.rawText) {
+      setter({ ...current, separator: sep });
       return;
     }
 
-    // This array will hold the promises for any active upload requests
-    const uploadPromises = [];
-
-    // --- Dataset 1 ---
-    if (uploadData.dataset1.file) {
-      const formData = new FormData();
-      formData.append("file", uploadData.dataset1.file);
-      formData.append("separator", uploadData.dataset1.separator);
-
-      const p1 = fetch('http://localhost:8000/upload_dataset_1', { method: 'POST', body: formData })
-        .then(response => {
-          if (!response.ok) throw new Error('Dataset 1 upload failed');
-          return response.json();
-        });
-      uploadPromises.push(p1);
-    }
-
-    // --- Dataset 2 ---
-    if (uploadData.dataset2.file) {
-      const formData = new FormData();
-      formData.append("file", uploadData.dataset2.file);
-      formData.append("separator", uploadData.dataset2.separator);
-
-      const p2 = fetch('http://localhost:8000/upload_dataset_2', { method: 'POST', body: formData })
-        .then(response => {
-          if (!response.ok) throw new Error('Dataset 2 upload failed');
-          return response.json();
-        });
-      uploadPromises.push(p2);
-    }
-
-    // --- Ground Truth (Optional) ---
-    if (uploadData.groundTruth.file) {
-      const formData = new FormData();
-      formData.append("file", uploadData.groundTruth.file);
-      formData.append("separator", uploadData.groundTruth.separator);
-
-      const p3 = fetch('http://localhost:8000/upload_ground_truth', { method: 'POST', body: formData })
-        .then(response => {
-          if (!response.ok) throw new Error('Ground Truth upload failed');
-          return response.json();
-        });
-      uploadPromises.push(p3);
-    }
-
-    // 2. Wait for all active uploads to finish successfully
-    Promise.all(uploadPromises)
-      .then((results) => {
-        console.log('All datasets successfully sent to backend:', results);
-
-
-        const configFormData = new FormData();
-        if (uploadData.dataset1.file) {
-          configFormData.append("id_1", uploadData.dataset1.idColumn || "");
-          configFormData.append("num_rows_1", uploadData.dataset1.maxRows || 0);
-
-          // FastAPI list=Form() expects multiple appends of the same key
-          uploadData.dataset1.attributes.forEach(attr => {
-            configFormData.append("attributes_1", attr);
-          });
-        }
-
-        if (uploadData.dataset2.file) {
-          configFormData.append("id_2", uploadData.dataset2.idColumn || "");
-          configFormData.append("num_rows_2", uploadData.dataset2.maxRows || 0);
-
-          uploadData.dataset2.attributes.forEach(attr => {
-            configFormData.append("attributes_2", attr);
-          });
-        }
-
-        return fetch('http://localhost:8000/pyjedai/load_data', {
-          method: 'POST',
-          body: configFormData
-          });
-        })
-       .then(configResponse => {
-          if (!configResponse.ok) throw new Error('Failed to load datamodel configuration in backend');
-          return configResponse.json();
-        })
-        .then(configResult => {
-          console.log('Datamodel successfully configured:', configResult);
-
-        // Execute the prop callback to notify App.jsx to move to Step 2
-        if (onUploadSuccess) {
-          onUploadSuccess();
-        }
-      })
-      .catch(error => {
-        console.error('An error occurred during pipeline upload:', error);
-        alert(`Upload error: ${error.message}. Please verify your local backend server is running.`);
-      });
-
-
-
+    // Instantly re-parse table if user overrides the text input
+    const parsed = parseContent(current.rawText, sep);
+    setter({
+      ...current,
+      separator: sep,
+      headers: parsed.headers,
+      previewRows: parsed.previewRows,
+      totalRowsEstimate: parsed.totalRowsEstimate,
+    });
   };
 
-  const styles = {
-    container: { display: 'flex', flexDirection: 'column', gap: '20px' },
-    card: {
-      backgroundColor: '#ffffff',
-      border: '1px solid #e0e0e0',
-      borderLeft: '5px solid #2ecc71',
-      padding: '20px',
-      borderRadius: '6px',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-    },
-    header: { marginTop: '0', color: '#2c3e50', fontSize: '1.2rem', display: 'flex', justifyContent: 'space-between' },
-    formGroup: { display: 'flex', gap: '15px', marginTop: '15px', alignItems: 'center', flexWrap: 'wrap' },
-    label: { fontWeight: '600', fontSize: '0.9rem', color: '#34495e' },
-    input: { padding: '8px', border: '1px solid #bdc3c7', borderRadius: '4px', fontSize: '0.9rem' },
-    select: { padding: '8px', border: '1px solid #bdc3c7', borderRadius: '4px', fontSize: '0.9rem', backgroundColor: '#fff' },
-    fileInput: { padding: '5px', fontSize: '0.9rem' },
-    submitButton: {
-      padding: '12px 24px', backgroundColor: '#3498db', color: 'white', border: 'none',
-      borderRadius: '4px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer',
-      alignSelf: 'center', marginTop: '10px',
-    },
-    instructions: { fontSize: '0.9rem', color: '#7f8c8d', marginTop: '15px', marginBottom: '5px' },
-    tableWrapper: {
-      marginTop: '10px',
-      overflowX: 'auto',
-      border: '1px solid #e0e0e0',
-      borderRadius: '4px',
-      maxHeight: '300px',
-      overflowY: 'auto'
-    },
-    table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' },
-    thInteractive: (isId, isAttribute) => ({
-      padding: '10px',
-      textAlign: 'left',
-      backgroundColor: isId ? '#ecf0f1' : isAttribute ? '#dff9fb' : '#f8f9fa',
-      color: isId ? '#7f8c8d' : isAttribute ? '#2980b9' : '#2c3e50',
-      borderBottom: '2px solid #bdc3c7',
-      cursor: isId ? 'not-allowed' : 'pointer',
-      transition: 'background-color 0.2s',
-      border: isAttribute ? '2px solid #3498db' : '1px solid #e0e0e0',
-    }),
-    thReadOnly: {
-      padding: '10px',
-      textAlign: 'left',
-      backgroundColor: '#f8f9fa',
-      color: '#2c3e50',
-      borderBottom: '2px solid #bdc3c7',
-      border: '1px solid #e0e0e0',
-      cursor: 'default'
-    },
-    td: { padding: '8px 10px', borderBottom: '1px solid #ecf0f1', color: '#555' },
-    badge: {
-      fontSize: '0.65rem',
-      backgroundColor: '#95a5a6',
-      color: '#fff',
-      padding: '2px 6px',
-      borderRadius: '10px',
-      marginLeft: '8px',
-      verticalAlign: 'middle'
-    }
+  const clearFile = (target: "d1" | "d2" | "gt") => {
+    const setter = target === "d1" ? setD1 : target === "d2" ? setD2 : setGt;
+    setter(emptyFileConfig());
   };
 
-  const datasets = [
-    { key: 'dataset1', title: 'Dataset 1' },
-    { key: 'dataset2', title: 'Dataset 2' },
-    { key: 'groundTruth', title: 'Ground Truth (Optional)' },
-  ];
+  const erMode = d2.file ? "Record Linkage (Clean-Clean ER)" : "Deduplication (Dirty ER)";
+  const activeConfig = activePreview === "d1" ? d1 : activePreview === "d2" ? d2 : gt;
 
   return (
-    <div style={styles.container}>
-      {datasets.map((ds) => {
-        const data = uploadData[ds.key];
-        const isGroundTruth = ds.key === 'groundTruth';
+    <div className="space-y-6 max-w-6xl mx-auto pb-12">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+        <div>
+          <Title className="text-xl">Create Matching Task</Title>
+          <Text>Configure source datasets, delimiters, and optional evaluation ground truth.</Text>
+        </div>
+        <div className="flex items-center space-x-2">
+          <span className="text-xs text-slate-500 font-medium">Detected Mode:</span>
+          <Badge color={d2.file ? "indigo" : "amber"}>{erMode}</Badge>
+          {gt.file && <Badge color="emerald">Ground Truth Active</Badge>}
+        </div>
+      </div>
 
-        return (
-          <div key={ds.key} style={styles.card}>
-            <div style={styles.header}>
-              <span>{ds.title}</span>
-              {data.file && <span style={{fontSize: '0.8rem', color: '#7f8c8d', fontWeight: 'normal'}}>
-                {data.file.name} ({(data.file.size / 1024).toFixed(1)} KB)
-              </span>}
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>CSV File:</label>
-              <input
-                type="file"
-                accept=".csv"
-                style={styles.fileInput}
-                onChange={(e) => handleFileChange(ds.key, e)}
-              />
-
-              <label style={styles.label}>Separator:</label>
-              <input
-                type="text"
-                maxLength="3"
-                style={{ ...styles.input, width: '50px', textAlign: 'center' }}
-                value={data.separator}
-                onChange={(e) => {
-                  handleChange(ds.key, "separator", e.target.value);
-                  if (data.file) parseAndPreviewCSV(data.file, ds.key, e.target.value);
-                }}
-                placeholder=","
-              />
-              {/* Rows Input Field */}
-              {/* Rows now represent Backend Processing limit, NOT UI preview */}
-
-              {!isGroundTruth && (
-                <>
-              <label style={{ ...styles.label, marginLeft: '5px' }}>Process Rows:</label>
-              <input
-                type="number"
-                min="1"
-                max = {data.totalRows}
-                style={{ ...styles.input, width: '80px', textAlign: 'center' }}
-                value={data.maxRows || ''}
-                onChange={(e) => {
-
-                  let val = e.target.value;
-                  const maxLimit = data.totalRows; /* FIX 2: Compare against totalRows */
-
-                  // Validate manual typing
-                  if (val !== '') {
-                    const numVal = Number(val);
-                    if (numVal > maxLimit) {
-                      val = maxLimit; // Cap at max total rows
-                    } else if (numVal < 1) {
-                      val = 1; // Prevent 0 or negative numbers
-                    }
-                  }
-                  // Simply update the state. We don't call parseAndPreviewCSV because
-                  // we are no longer altering the UI table preview, just the backend limit.
-                  handleChange(ds.key, "maxRows", val);
-                }}
-                />
-                </>
-              )
-              }
-
-              {/* Conditionally render the ID column dropdown only if it's NOT ground truth */}
-              {!isGroundTruth && (
-                <>
-                  <label style={styles.label} style={{ marginLeft: '10px' }}>ID Column:</label>
-                  <select
-                    style={styles.select}
-                    value={data.idColumn}
-                    onChange={(e) => handleChange(ds.key, 'idColumn', e.target.value)}
-                    disabled={data.headers.length === 0}
-                  >
-                    <option value="" disabled>Select ID</option>
-                    {data.headers.map((header, idx) => (
-                      <option key={idx} value={header}>{header}</option>
-                    ))}
-                  </select>
-                </>
-              )}
-            </div>
-
-            {data.headers.length > 0 && (
-              <>
-                {/* Conditionally render instructions */}
-                {!isGroundTruth && (
-                  <div style={styles.instructions}>
-                    <strong>Select Attributes:</strong> Click the column headers below to select the attributes you want to use for matching.
-                  </div>
-                )}
-
-                <div style={styles.tableWrapper}>
-                  <table style={styles.table}>
-                    <thead>
-                      <tr>
-                        {data.headers.map((header, index) => {
-                          // For Ground Truth, render a static read-only header
-                          if (isGroundTruth) {
-                            return (
-                              <th key={index} style={styles.thReadOnly}>
-                                {header}
-                              </th>
-                            );
-                          }
-
-                          // For Datasets 1 & 2, render interactive headers
-                          const isId = data.idColumn === header;
-                          const isAttribute = data.attributes.includes(header);
-
-                          return (
-                            <th
-                              key={index}
-                              style={styles.thInteractive(isId, isAttribute)}
-                              onClick={() => toggleAttribute(ds.key, header)}
-                              title={isId ? "ID column cannot be an attribute" : "Click to select as an attribute"}
-                            >
-                              {header}
-                              {isAttribute && ' ✓'}
-                              {isId && <span style={styles.badge}>ID</span>}
-                            </th>
-                          );
-                        })}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.rows.map((row, rowIndex) => (
-                        <tr key={rowIndex}>
-                          {row.map((cell, cellIndex) => (
-                            <td key={cellIndex} style={styles.td}>
-                              {cell}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
+      <Card className="p-5">
+        <Text className="font-semibold text-slate-800 text-sm mb-3">Task Details</Text>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Task Name *</label>
+            <input
+              type="text"
+              placeholder="e.g. DBLP-ACM Benchmark Linkage"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              className="w-full text-sm rounded-lg border border-slate-300 px-3.5 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            />
           </div>
-        );
-      })}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Description</label>
+            <input
+              type="text"
+              placeholder="e.g. Deduplicating bibliographic citations"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full text-sm rounded-lg border border-slate-300 px-3.5 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            />
+          </div>
+        </div>
+      </Card>
 
-      <button style={styles.submitButton} onClick={handleProcessData}>
-        Confirm Data & Proceed
-      </button>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <UploadSlot
+          title="Dataset 1 (D₁)"
+          required={true}
+          description="Primary table to deduplicate or link"
+          config={d1}
+          onFileChange={(e) => handleFileChange(e, "d1")}
+          onSeparatorChange={(sep) => handleSeparatorChange(sep, "d1")}
+          onClear={() => clearFile("d1")}
+          onSelectPreview={() => setActivePreview("d1")}
+          isSelected={activePreview === "d1"}
+        />
+        <UploadSlot
+          title="Dataset 2 (D₂)"
+          required={false}
+          description="Secondary table for Clean-Clean Linkage"
+          config={d2}
+          onFileChange={(e) => handleFileChange(e, "d2")}
+          onSeparatorChange={(sep) => handleSeparatorChange(sep, "d2")}
+          onClear={() => clearFile("d2")}
+          onSelectPreview={() => setActivePreview("d2")}
+          isSelected={activePreview === "d2"}
+        />
+        <UploadSlot
+          title="Ground Truth (GT)"
+          required={false}
+          description="True match pairs for F1 scoring"
+          config={gt}
+          onFileChange={(e) => handleFileChange(e, "gt")}
+          onSeparatorChange={(sep) => handleSeparatorChange(sep, "gt")}
+          onClear={() => clearFile("gt")}
+          onSelectPreview={() => setActivePreview("gt")}
+          isSelected={activePreview === "gt"}
+        />
+      </div>
+
+      <Card className="p-0 overflow-hidden border border-slate-200">
+        <div className="bg-slate-50 px-5 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center space-x-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Previewing:</span>
+            <div className="flex space-x-1.5">
+              <button
+                onClick={() => setActivePreview("d1")}
+                className={`px-3 py-1 rounded text-xs font-medium transition ${activePreview === "d1" ? "bg-indigo-600 text-white shadow-sm" : "bg-white text-slate-600 hover:bg-slate-100"}`}
+              >
+                Dataset 1 {d1.file && `(${d1.headers.length} cols)`}
+              </button>
+              <button
+                onClick={() => setActivePreview("d2")}
+                disabled={!d2.file}
+                className={`px-3 py-1 rounded text-xs font-medium transition ${!d2.file ? "opacity-40 cursor-not-allowed bg-slate-200 text-slate-500" : activePreview === "d2" ? "bg-indigo-600 text-white shadow-sm" : "bg-white text-slate-600 hover:bg-slate-100"}`}
+              >
+                Dataset 2 {d2.file && `(${d2.headers.length} cols)`}
+              </button>
+              <button
+                onClick={() => setActivePreview("gt")}
+                disabled={!gt.file}
+                className={`px-3 py-1 rounded text-xs font-medium transition ${!gt.file ? "opacity-40 cursor-not-allowed bg-slate-200 text-slate-500" : activePreview === "gt" ? "bg-indigo-600 text-white shadow-sm" : "bg-white text-slate-600 hover:bg-slate-100"}`}
+              >
+                Ground Truth {gt.file && `(${gt.headers.length} cols)`}
+              </button>
+            </div>
+          </div>
+          {activeConfig.file && (
+            <Text className="text-xs text-slate-500">
+              Showing first {activeConfig.previewRows.length} of ~{activeConfig.totalRowsEstimate.toLocaleString()} rows
+            </Text>
+          )}
+        </div>
+
+        {activeConfig.file && activeConfig.headers.length > 0 ? (
+          <div className="overflow-x-auto max-h-[380px]">
+            <Table>
+              <TableHead className="bg-slate-100 sticky top-0 z-10">
+                <TableRow>
+                  <TableHeaderCell className="w-12 text-center text-slate-400">#</TableHeaderCell>
+                  {activeConfig.headers.map((h, idx) => (
+                    <TableHeaderCell key={idx} className="font-semibold text-slate-700">{h || `Column ${idx + 1}`}</TableHeaderCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {activeConfig.previewRows.map((row, rIdx) => (
+                  <TableRow key={rIdx} className="hover:bg-slate-50/80">
+                    <TableCell className="text-center text-xs text-slate-400 font-mono">{rIdx + 1}</TableCell>
+                    {row.map((cell, cIdx) => (
+                      <TableCell key={cIdx} className="text-xs text-slate-700 truncate max-w-xs">
+                        {cell || <span className="text-slate-300 italic">null</span>}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="p-12 text-center text-slate-400">
+            <svg className="w-8 h-8 mx-auto mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="text-sm font-medium">No file loaded for this slot</p>
+          </div>
+        )}
+      </Card>
+
+      <div className="flex justify-end space-x-3 pt-2">
+        {onCancel && (
+          <button type="button" onClick={onCancel} className="px-5 py-2 text-sm font-medium rounded-lg text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">Cancel</button>
+        )}
+        <button
+          type="button"
+          disabled={!projectName || !d1.file}
+          className={`px-6 py-2 text-sm font-semibold rounded-lg shadow-sm text-white transition ${!projectName || !d1.file ? "bg-slate-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700 cursor-pointer"}`}
+          onClick={() => alert(`Project "${projectName}" ready to load!`)}
+        >
+          Initialize Workflow Pipeline &rarr;
+        </button>
+      </div>
     </div>
+  );
+}
+
+function UploadSlot({ title, required, description, config, onFileChange, onSeparatorChange, onClear, onSelectPreview, isSelected }: any) {
+  return (
+    <Card className={`p-4 flex flex-col justify-between transition border ${isSelected ? "ring-2 ring-indigo-500 border-transparent" : "border-slate-200"}`}>
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Text className="font-bold text-slate-800 text-sm">
+            {title} {required && <span className="text-red-500">*</span>}
+          </Text>
+          <span className="text-[11px] text-slate-400">{required ? "Required" : "Optional"}</span>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">{description}</p>
+
+        {/* 2. Text Input Replacement */}
+        <div className="flex items-center space-x-2 mb-3 bg-slate-50 p-2 rounded-md border border-slate-200">
+          <label className="text-xs font-medium text-slate-600">Delimiter:</label>
+          <input
+            type="text"
+            maxLength={3}
+            value={config.separator}
+            onChange={(e) => onSeparatorChange(e.target.value)}
+            className="text-xs bg-white border border-slate-300 rounded px-2 py-1 font-mono focus:ring-1 focus:ring-indigo-500 w-16 text-center"
+            placeholder=","
+          />
+        </div>
+
+        {!config.file ? (
+          <div className="border border-dashed border-slate-300 rounded-lg p-5 text-center hover:bg-slate-50 relative cursor-pointer">
+            <input type="file" accept=".csv,.tsv,.txt" onChange={onFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+            <svg className="w-6 h-6 text-slate-400 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            <p className="text-xs font-medium text-slate-700">Choose file</p>
+          </div>
+        ) : (
+          <div className="bg-indigo-50/70 border border-indigo-100 rounded-lg p-3 text-xs space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-800 truncate max-w-[140px]">{config.file.name}</span>
+              <button onClick={onClear} className="text-red-500 hover:text-red-700 font-bold ml-1">&times;</button>
+            </div>
+            <p className="text-slate-500 text-[11px]">{(config.file.size / 1024).toFixed(1)} KB &bull; {config.headers.length} attributes</p>
+          </div>
+        )}
+      </div>
+      {config.file && (
+        <button type="button" onClick={onSelectPreview} className="mt-3 text-xs font-medium text-indigo-600 hover:text-indigo-800 text-left underline">
+          View 10-row preview &rarr;
+        </button>
+      )}
+    </Card>
   );
 }

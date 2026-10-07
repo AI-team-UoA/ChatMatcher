@@ -1,195 +1,85 @@
-import os
-
-from fastapi import FastAPI, File, HTTPException, UploadFile, Form
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import pandas as pd
-import io
+import os
+import shutil
 import json
-import pickle
-from pyjedai.datamodel import Data
+import re
+from typing import Optional
 
 app = FastAPI()
 
-DATASET_1_PATH = "temp_dataset_1.parquet"
-DATASET_2_PATH = "temp_dataset_2.parquet"
-GROUND_TRUTH_PATH = "temp_ground_truth.parquet"
-
-PYJEDAI_DATA_PICKLE = "pyjedai_data.pkl"
-
-# Define the origins that are allowed to make requests to your backend
-origins = [
-    "http://localhost:5173", # Default Vite port
-    "http://localhost:3000", # Default Create-React-App port
-]
-
+# Crucial: Allow Vite/React to talk to FastAPI
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,            # Allows your React app origin
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
-    allow_methods=["*"],              # Allows all HTTP methods (POST, GET, etc.)
-    allow_headers=["*"],              # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
+# Base directory on your machine to store datasets
+STORAGE_DIR = "local_storage/projects"
+os.makedirs(STORAGE_DIR, exist_ok=True)
 
-@app.post("/upload_dataset_1")
-async def upload_file(file: UploadFile = File(...),
-                separator: str = Form(default=',')):
+@app.post("/api/projects/upload")
+async def create_matching_project(
+    project_name: str = Form(...),
+    description: str = Form(""),
+    d1_separator: str = Form(","),
+    d1_id_column: str = Form(""),
+    d1_attributes: str = Form("[]"), # Receives the JSON string
+    d2_separator: str = Form(","),
+    d2_id_column: str = Form(""),
+    d2_attributes: str = Form("[]"),
+    gt_separator: str = Form(","),
+    d1_file: UploadFile = File(...),
+    d1_maxRows: Optional[int] = Form(None),
+    d2_maxRows: Optional[int] = Form(None),
+    d2_file: Optional[UploadFile] = File(None),
+    gt_file: Optional[UploadFile] = File(None)
 
-    if not file.filename.endswith('.csv'):
-        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV.")
-
-
-    try:
-        # 2. Read the file contents asynchronously
-        contents = await file.read()
-
-        # 3. Load the contents into a Pandas DataFrame
-        # io.BytesIO is used to convert the raw bytes into a file-like object Pandas can read
-        df = pd.read_csv(io.BytesIO(contents), sep=separator)
-
-        # --- You can add your data processing logic here ---
-
-        # 4. Return some summary statistics or a preview
-
-        df.to_parquet(DATASET_1_PATH, index=False)  # Save the DataFrame to a Parquet file
-
-        preview_json = json.loads(df.head(3).to_json(orient="records"))  # Convert the first 3 rows to JSON
-
-        return JSONResponse(content={
-            "message": "DataFrame loaded successfully!",
-            "filename": file.filename,
-            "separator": separator,
-            "row_count": len(df),
-            "columns": df.columns.tolist(),
-            "preview": preview_json
-        })
-
-    except Exception as e:
-        # Handle cases where the CSV is malformed
-        raise HTTPException(status_code=500, detail=f"There was an error parsing the file: {str(e)}")
-
-@app.post("/upload_dataset_2")
-async def upload_file_2(file: UploadFile = File(...),
-                separator: str = Form(default=',')):
-
-    if not file.filename.endswith('.csv'):
-        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV.")
-
-
-    try:
-        # 2. Read the file contents asynchronously
-        contents = await file.read()
-
-        # 3. Load the contents into a Pandas DataFrame
-        # io.BytesIO is used to convert the raw bytes into a file-like object Pandas can read
-        df = pd.read_csv(io.BytesIO(contents), sep=separator)
-
-        # --- You can add your data processing logic here ---
-
-        # 4. Return some summary statistics or a preview
-
-        df.to_parquet(DATASET_2_PATH, index=False)  # Save the DataFrame to a Parquet file
-
-        preview_json = json.loads(df.head(3).to_json(orient="records"))  # Convert the first 3 rows to JSON
-
-        return  JSONResponse(content={
-            "message": "DataFrame loaded successfully!",
-            "filename": file.filename,
-            "separator": separator,
-            "row_count": len(df),
-            "columns": df.columns.tolist(),
-            "preview": preview_json
-        })
-
-    except Exception as e:
-        # Handle cases where the CSV is malformed
-        raise HTTPException(status_code=500, detail=f"There was an error parsing the file: {str(e)}")
-
-@app.post("/upload_ground_truth")
-async def upload_file_ground_truth(file: UploadFile = File(...),
-                separator: str = Form(default=',')):
-
-    if not file.filename.endswith('.csv'):
-        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV.")
-
-
-    try:
-        # 2. Read the file contents asynchronously
-        contents = await file.read()
-
-        # 3. Load the contents into a Pandas DataFrame
-        # io.BytesIO is used to convert the raw bytes into a file-like object Pandas can read
-        df = pd.read_csv(io.BytesIO(contents), sep=separator)
-
-        # --- You can add your data processing logic here ---
-
-        # 4. Return some summary statistics or a preview
-
-        df.to_parquet(GROUND_TRUTH_PATH, index=False)  # Save the DataFrame to a Parquet file
-
-        preview_json = json.loads(df.head(3).to_json(orient="records"))  # Convert the first 3 rows to JSON
-
-        return JSONResponse(content={
-            "message": "DataFrame loaded successfully!",
-            "filename": file.filename,
-            "separator": separator,
-            "row_count": len(df),
-            "columns": df.columns.tolist(),
-            "preview": preview_json
-        })
-
-    except Exception as e:
-        # Handle cases where the CSV is malformed
-        raise HTTPException(status_code=500, detail=f"There was an error parsing the file: {str(e)}")
-
-
-@app.post("/pyjedai/load_data")
-async def create_datamodel_pyjedai(
-        id_1: str = Form(default=None),
-        attributes_1: list = Form(default=None),
-        num_rows_1: int = Form(default=None),
-        id_2: str = Form(default=None),
-        attributes_2: list = Form(default=None),
-        num_rows_2: int = Form(default=None),
 ):
+    # 1. Sanitize the project name for safe folder creation
+    safe_folder_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', project_name).lower()
+    project_path = os.path.join(STORAGE_DIR, safe_folder_name)
 
-    df_1 = pd.read_parquet(DATASET_1_PATH)
+    if os.path.exists(project_path):
+        raise HTTPException(status_code=400, detail="A project with this name already exists.")
 
-    if os.path.exists(DATASET_2_PATH):
-        df_2 = pd.read_parquet(DATASET_2_PATH)
-    else:
-        df_2 = None
+    os.makedirs(project_path)
 
-    if os.path.exists(GROUND_TRUTH_PATH):
-        df_ground_truth = pd.read_parquet(GROUND_TRUTH_PATH)
-    else:
-        df_ground_truth = None
+    # 2. Helper function to stream file chunks to disk (prevents RAM crashes on huge files)
+    def save_file_to_disk(upload_file: UploadFile, prefix: str):
+        if not upload_file:
+            return None
+        file_path = os.path.join(project_path, f"{prefix}_{upload_file.filename}")
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(upload_file.file, buffer)
+        return file_path
 
-    if num_rows_1 is not None:
-        df_1 = df_1.head(num_rows_1)
+    # 3. Save the uploaded files
+    d1_saved_path = save_file_to_disk(d1_file, "d1")
+    d2_saved_path = save_file_to_disk(d2_file, "d2")
+    gt_saved_path = save_file_to_disk(gt_file, "gt")
 
-    if num_rows_2 is not None and df_2 is not None:
-        df_2 = df_2.head(num_rows_2)
+    # 4. Generate and save a metadata config
+    metadata = {
+        "project_name": project_name,
+        "description": description,
+        "mode": "Record Linkage" if d2_saved_path else "Deduplication",
+        "d1": {
+            "path": d1_saved_path, "separator": d1_separator, "filename": d1_file.filename,
+            "id": d1_id_column, "attributes": json.loads(d1_attributes), "maxrows": d1_maxRows
+            },
+        "d2": {
+            "path": d2_saved_path, "separator": d2_separator,
+            "filename": d2_file.filename, "id": d2_id_column,
+            "attributes": json.loads(d2_attributes), "maxrows": d2_maxRows
+            } if d2_saved_path else None,
+        "gt": {"path": gt_saved_path, "separator": gt_separator, "filename": gt_file.filename} if gt_saved_path else None
+    }
 
+    with open(os.path.join(project_path, "config.json"), "w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=4)
 
-    print(f"{df_1.shape[0]} rows in dataset 1")
-
-    data = Data(
-        dataset_1=df_1,
-        dataset_2=df_2,
-        ground_truth=df_ground_truth,
-        id_column_name_1=id_1,
-        attributes_1=attributes_1,
-        id_column_name_2=id_2,
-        attributes_2=attributes_2
-    )
-    print(f"DataModel created with {len(data.dataset_1)} rows in dataset 1 and {len(data.dataset_2) if data.dataset_2 is not None else 0} rows in dataset 2")
-    print(f"Ground truth has {len(data.ground_truth) if data.ground_truth is not None else 0} rows")
-    print(f"Attributes for dataset 1: {data.attributes_1}")
-    print(f"Attributes for dataset 2: {data.attributes_2}")
-
-    with open(PYJEDAI_DATA_PICKLE, 'wb+') as f:
-        pickle.dump(data, f)
-
-    return JSONResponse(content={"message": "DataModel created and saved successfully!"})
+    return {"status": "success", "project": metadata}
