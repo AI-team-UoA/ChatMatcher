@@ -323,12 +323,26 @@ export default function DataLoader( { onUploadSuccess }) {
               <input
                 type="number"
                 min="1"
+                max = {data.totalRows}
                 style={{ ...styles.input, width: '80px', textAlign: 'center' }}
                 value={data.maxRows || ''}
                 onChange={(e) => {
+
+                  let val = e.target.value;
+                  const maxLimit = data.totalRows; /* FIX 2: Compare against totalRows */
+
+                  // Validate manual typing
+                  if (val !== '') {
+                    const numVal = Number(val);
+                    if (numVal > maxLimit) {
+                      val = maxLimit; // Cap at max total rows
+                    } else if (numVal < 1) {
+                      val = 1; // Prevent 0 or negative numbers
+                    }
+                  }
                   // Simply update the state. We don't call parseAndPreviewCSV because
                   // we are no longer altering the UI table preview, just the backend limit.
-                  handleChange(ds.key, "maxRows", e.target.value);
+                  handleChange(ds.key, "maxRows", val);
                 }}
                 />
                 </>
