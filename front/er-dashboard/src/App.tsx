@@ -19,6 +19,9 @@ import {
 } from "@tremor/react";
 
 import UploadDatasets from "./components/UploadDatasets";
+import AvailableDatasets from "./components/AvailableDatasets";
+import CandidatePairsGenerator from "./components/CandidatePairs";
+import Examples from "./components/Examples"; // Import the type for CandidatePairsGenerator
 
 // Mock data for the Overview dashboard
 const performanceData = [
@@ -39,8 +42,8 @@ const workflows = [
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>("overview");
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({ datasets: true });
-  
-  
+
+
   const navItems = [
     {
       id: "overview",
@@ -65,14 +68,24 @@ export default function App() {
       ],
     },
     {
-      id: "workflow",
-      label: "Workflow",
+      id: "candidate-pairs",
+      label: "Generate Candidate Pairs",
       icon: (
         <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
       ),
     },
+    {
+      id: "examples",
+      label: "Generate Examples",
+      icon: (
+        <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      ),
+    },
+
     {
       id: "results",
       label: "Results",
@@ -87,7 +100,7 @@ export default function App() {
   const toggleMenu = (id: string) => {
     setExpandedMenus((prev) => ({ ...prev, [id]: !prev[id] }));
   };
-  
+
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -107,7 +120,7 @@ export default function App() {
           {navItems.map((item) => {
             const hasSubItems = Boolean(item.subItems);
             const isExpanded = expandedMenus[item.id];
-            
+
             // Item is active if it's the exact tab, or if a subItem is currently active
             const isActive = activeTab === item.id || (hasSubItems && item.subItems?.some(sub => sub.id === activeTab));
 
@@ -168,7 +181,7 @@ export default function App() {
           })}
         </nav>
 
-        
+
         {/* Footer / Status */}
         <div className="p-4 border-t border-slate-800 text-xs text-slate-400">
           <p className="font-medium text-slate-300">Engine: Ready</p>
@@ -278,7 +291,12 @@ export default function App() {
           )}
 
           {/* TAB 2: DATASETS */}
+          {activeTab === "datasets-available" && <AvailableDatasets />}
           {activeTab === "datasets-upload" && <UploadDatasets />}
+
+          {activeTab === "candidate-pairs" && <CandidatePairsGenerator />}
+          {activeTab === "examples" && <Examples />}
+
 
           {/* TAB 3: WORKFLOW */}
           {activeTab === "workflow" && (

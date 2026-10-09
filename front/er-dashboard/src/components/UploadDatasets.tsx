@@ -22,7 +22,7 @@ interface FileConfig {
   // New state for ER configuration
   idColumn: string;
   selectedAttributes: string[];
-  maxRows: 0 ;
+  maxRows: number; // <-- New property for max rows to process
 }
 
 const emptyFileConfig = (): FileConfig => ({
@@ -78,7 +78,7 @@ export default function NewMatchingProject({ onCancel }: { onCancel?: () => void
     return {
       headers,
       previewRows,
-      totalRowsEstimate: Math.max(0, lines.length - 1),
+      totalRowsEstimate: Math.max(0, lines.length - 1), // <-- Fix: Subtract 1 for the header row
     };
   };
 
@@ -131,6 +131,16 @@ export default function NewMatchingProject({ onCancel }: { onCancel?: () => void
       totalRowsEstimate: parsed.totalRowsEstimate,
       idColumn: parsed.headers.length > 0 ? parsed.headers[0] : "",
       selectedAttributes: [], // Reset selections if delimiter changes
+    });
+  };
+
+  const handleMaxRowsChange = (val: number, target: "d1" | "d2" | "gt") => {
+    const setter = target === "d1" ? setD1 : target === "d2" ? setD2 : setGt;
+    const current = target === "d1" ? d1 : target === "d2" ? d2 : gt;
+
+    setter({
+      ...current,
+      maxRows: val,
     });
   };
 
@@ -228,6 +238,7 @@ export default function NewMatchingProject({ onCancel }: { onCancel?: () => void
           config={d1}
           onFileChange={(e) => handleFileChange(e, "d1")}
           onSeparatorChange={(sep) => handleSeparatorChange(sep, "d1")}
+          onMaxRowsChange={(val) => handleMaxRowsChange(val, "d1")} // <-- Pass the new prop
           onClear={() => clearFile("d1")}
           onSelectPreview={() => setActivePreview("d1")}
           isSelected={activePreview === "d1"}
@@ -239,6 +250,7 @@ export default function NewMatchingProject({ onCancel }: { onCancel?: () => void
           config={d2}
           onFileChange={(e) => handleFileChange(e, "d2")}
           onSeparatorChange={(sep) => handleSeparatorChange(sep, "d2")}
+          onMaxRowsChange={(val) => handleMaxRowsChange(val, "d2")} // <-- Pass the new prop
           onClear={() => clearFile("d2")}
           onSelectPreview={() => setActivePreview("d2")}
           isSelected={activePreview === "d2"}
@@ -401,6 +413,7 @@ export default function NewMatchingProject({ onCancel }: { onCancel?: () => void
               formData.append("d1_separator", d1.separator);
               formData.append("d1_id_column", d1.idColumn);
               formData.append("d1_attributes", JSON.stringify(d1.selectedAttributes));
+              formData.append("d1_max_rows", d1.maxRows.toString()); // <-- ADD THIS
             }
 
             if (d2.file) {
@@ -408,6 +421,7 @@ export default function NewMatchingProject({ onCancel }: { onCancel?: () => void
               formData.append("d2_separator", d2.separator);
               formData.append("d2_id_column", d2.idColumn);
               formData.append("d2_attributes", JSON.stringify(d2.selectedAttributes));
+              formData.append("d2_max_rows", d2.maxRows.toString()); // <-- ADD THIS
             }
 
             if (gt.file) {
@@ -444,17 +458,17 @@ export default function NewMatchingProject({ onCancel }: { onCancel?: () => void
   );
 }
 
-function UploadSlot({ 
-  title, 
-  required, 
-  description, 
-  config, 
-  onFileChange, 
-  onSeparatorChange, 
+function UploadSlot({
+  title,
+  required,
+  description,
+  config,
+  onFileChange,
+  onSeparatorChange,
   onMaxRowsChange, // <-- Add this prop
-  onClear, 
-  onSelectPreview, 
-  isSelected 
+  onClear,
+  onSelectPreview,
+  isSelected
 }: any) {
   return (
     <Card className={`p-4 flex flex-col justify-between transition border ${isSelected ? "ring-2 ring-indigo-500 border-transparent" : "border-slate-200"}`}>
