@@ -1,0 +1,20 @@
+{
+    "project_name": "amaazn",
+    "description": "amamamaamama",
+    "mode": "Deduplication",
+    "d1": {
+        "path": "local_storage/projects/amaazn/d1_amazonclean.csv",
+        "separator": "#",
+        "filename": "amazonclean.csv",
+        "id": "id",
+        "attributes": [
+            "title",
+            "description",
+            "manufacturer",
+            "price"
+        ],
+        "maxrows": 1354
+    },
+    "d2": null,
+    "gt": null
+}

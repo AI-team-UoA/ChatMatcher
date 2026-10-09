@@ -1,0 +1,51 @@
+{
+  "project_name": "Abt-Buy",
+  "description": "Abt buy ",
+  "mode": "Record Linkage",
+  "d1": {
+    "path": "local_storage/projects/abt-buy/d1_abtclean.csv",
+    "separator": "|",
+    "filename": "abtclean.csv",
+    "id": "id",
+    "attributes": [
+      "name",
+      "description",
+      "price"
+    ],
+    "maxrows": 1076
+  },
+  "d2": {
+    "path": "local_storage/projects/abt-buy/d2_buyclean.csv",
+    "separator": "|",
+    "filename": "buyclean.csv",
+    "id": "id",
+    "attributes": [
+      "name",
+      "description",
+      "price"
+    ],
+    "maxrows": 1064
+  },
+  "gt": {
+    "path": "local_storage/projects/abt-buy/gt_gtclean.csv",
+    "separator": "|",
+    "filename": "gtclean.csv"
+  },
+  "candidate_pairs": {
+    "method": "knn_search",
+    "created_at": "2026-10-09T13:43:06.924837+00:00",
+    "path": "/home/lefteris/ChatMatcher/back/local_storage/projects/abt-buy/candidate_pairs.csv",
+    "num_pairs": 11077,
+    "config": {
+      "metric": "cosine",
+      "top_k": 10,
+      "tokenization": "standard"
+    }
+  },
+  "examples": {
+    "path": "/home/lefteris/ChatMatcher/back/local_storage/projects/abt-buy/examples.json",
+    "num_true": 0,
+    "num_false": 0,
+    "updated_at": "2026-10-09T13:53:58.437495+00:00"
+  }
+}

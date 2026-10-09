@@ -1,0 +1,30 @@
+{
+    "project_name": "Amazon",
+    "description": "Amazon adsd",
+    "mode": "Record Linkage",
+    "d1": {
+        "path": "local_storage/projects/amazon/d1_amazonclean.csv",
+        "separator": "#",
+        "filename": "amazonclean.csv",
+        "id": "id",
+        "attributes": [
+            "title",
+            "manufacturer",
+            "price"
+        ],
+        "maxrows": 1354
+    },
+    "d2": {
+        "path": "local_storage/projects/amazon/d2_buyclean.csv",
+        "filename": "buyclean.csv",
+        "separator": "|",
+        "id": "id",
+        "attributes": [
+            "name",
+            "description",
+            "price"
+        ],
+        "maxrows": 1064
+    },
+    "gt": null
+}
